@@ -1,13 +1,11 @@
 # ardp-ai
 
-Súkromná AI konfigurácia (GitHub Copilot + Claude Code + Codex) pre projekt **ardp**.
+Súkromná AI konfigurácia (GitHub Copilot + Claude Code + Codex) pre projekt **ardp**
+(repo `C:\Code\client`, Nx workspace `icz`).
 
-> Obsah (CLAUDE.md, AGENTS.md, `.github/instructions/*`, skilly) je zatiaľ **prevzatý zo šablóny
-> converge-ai a treba ho adaptovať na projekt ardp** - viď `HANDOFF.md`. Cesta k projektu sa nastaví
-> cez `link.ps1 -Dst <cesta>` (default v `link.ps1` je `C:\Code\ardp`).
-
-Tieto súbory **nie sú** súčasťou ardp repozitára (na tom projekte je AI tooling zakázaný).
-Žijú tu, verzujú sa normálne cez git a do ardp sa napájajú cez junctions + symlinky.
+> Obsah (CLAUDE.md, AGENTS.md, `.github/instructions/*`, skilly) je adaptovaný na projekt ardp.
+> Tieto súbory **nie sú** súčasťou ardp repozitára (na tom projekte je AI tooling zakázaný).
+> Žijú tu, verzujú sa normálne cez git a do ardp sa napájajú cez junctions + symlinky.
 
 ## Štruktúra
 
@@ -17,24 +15,25 @@ CLAUDE.md                              # Claude Code projektová pamäť (import
 .github/copilot-instructions.md        # Copilot repo-wide inštrukcie
 .github/instructions/*.instructions.md # file-type-specific inštrukcie (Copilot + Claude + Codex cez AGENTS.md)
 .github/skills/*/SKILL.md              # skilly (zdieľané Copilot + Claude + Codex)
-.claude/settings.local.json            # lokálne Claude Code nastavenia
-link.ps1                               # napojí všetko do converge worktree
+link.ps1                               # napojí všetko do projektu (default C:\Code\client)
+new-project.ps1                        # vyseeduje nový AI repo pre ďalší projekt
+HANDOFF.md                             # briefing pre zriadenie setupu na novom projekte
 ```
 
 ## Setup po naklonovaní
 
 ```powershell
-git clone https://github.com/psleziak/converge-ai.git C:\Code\converge-ai
-powershell -File C:\Code\converge-ai\link.ps1                 # default cieľ = C:\Code\converge-4.6
+git clone https://github.com/psleziak/ardp-ai.git C:\Code\ardp-ai
+powershell -File C:\Code\ardp-ai\link.ps1                 # default cieľ = C:\Code\client
 # iný projekt:
-powershell -File C:\Code\converge-ai\link.ps1 -Dst C:\Code\iny-projekt
+powershell -File C:\Code\ardp-ai\link.ps1 -Dst C:\Code\iny-projekt
 ```
 
-`link.ps1` vytvorí 8 linkov - junctions (`.github/instructions`, `.github/skills`, `.claude/skills`,
-`.agents/skills`) a symlinky (`AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`,
-`.claude/settings.local.json`) do cieľa - a sám idempotentne doplní jeho `.git/info/exclude`.
+`link.ps1` vytvorí **7 linkov** - junctions (`.github/instructions`, `.github/skills`,
+`.claude/skills`, `.agents/skills`) a symlinky (`AGENTS.md`, `CLAUDE.md`,
+`.github/copilot-instructions.md`) do cieľa - a sám idempotentne doplní jeho `.git/info/exclude`.
 Junctions nepotrebujú admin; symlinky na súbory potrebujú zapnutý **Developer Mode**
-(Settings → For developers). Skript je idempotentný.
+(Settings -> For developers). Skript je idempotentný.
 
 ## Codex
 
@@ -53,11 +52,11 @@ je per-stroj, mimo tohto repa - rieš `codex login` zvlášť.
 - **Iný projekt:** `powershell -File new-project.ps1 -Name <proj> -Dst <cesta-k-projektu>` vytvorí
   `C:\Code\<proj>-ai` skeleton; potom adaptuj obsah na nový projekt (viď `HANDOFF.md`) a pushni na
   nový privátny GitHub repo.
-- **Converge na nový stroj:** naklonuj converge + tento repo a spusti `link.ps1`.
+- **ardp na nový stroj:** naklonuj ardp (`C:\Code\client`) + tento repo a spusti `link.ps1`.
 - `HANDOFF.md` je samostatný briefing, ktorý možno odovzdať AI agentovi v novom projekte, aby si
   setup zriadil a obsah adaptoval sám.
 
 ## Workflow
 
-Súbory upravuj kdekoľvek (tu alebo cez napojené cesty v converge - je to ten istý súbor) a commituj
-normálne v tomto repe. Converge o nich nevie (sú v jeho `.git/info/exclude`).
+Súbory upravuj kdekoľvek (tu alebo cez napojené cesty v projekte - je to ten istý súbor) a commituj
+normálne v tomto repe. ardp o nich nevie (sú v jeho `.git/info/exclude`).

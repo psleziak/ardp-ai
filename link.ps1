@@ -12,7 +12,6 @@
     .github/skills                   junction -> .github/skills                   (Copilot + Claude)
     .claude/skills                   junction -> .github/skills                   (Claude)
     .agents/skills                   junction -> .github/skills                   (Codex)
-    .claude/settings.local.json      symlink  -> .claude/settings.local.json      (Claude)
 
   Adresarove linky su JUNCTION (mklink /J) - Codex skilly cez dir-symlink necita,
   cez junction ano. Suborove symlinky funguju bez admina vdaka zapnutemu Developer Mode.
@@ -22,7 +21,7 @@
   Spustenie:  powershell -File link.ps1                       # default $Dst nizsie
               powershell -File link.ps1 -Dst C:\Code\iny-projekt
 #>
-param([string]$Dst = 'C:\Code\ardp')
+param([string]$Dst = 'C:\Code\client')
 
 $ErrorActionPreference = 'Stop'
 $src = $PSScriptRoot
@@ -59,7 +58,6 @@ New-Link "$Dst\.github\instructions"            "$src\.github\instructions"     
 New-Link "$Dst\.github\skills"                   "$src\.github\skills"                  dir
 New-Link "$Dst\.claude\skills"                   "$src\.github\skills"                  dir
 New-Link "$Dst\.agents\skills"                   "$src\.github\skills"                  dir
-New-Link "$Dst\.claude\settings.local.json"      "$src\.claude\settings.local.json"     file
 
 # .git/info/exclude (per-klon, lokalne) - doplnit idempotentne
 $ex = Join-Path $Dst '.git\info\exclude'

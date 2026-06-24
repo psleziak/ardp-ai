@@ -4,59 +4,81 @@ applyTo: '**/*.form.ts'
 
 # Forms
 
-All forms use **ngrx-forms**. Form setup lives in a dedicated `*.form.ts` file next to its component,
-never inline in the component.
+In ardp, form setup lives in a dedicated **class-based** `*.form.ts` service next to its component,
+never inline in the component and never as plain exported functions. The service is an `@Injectable()`
+class that is provided on the component (`providers: [XxxForm]`) and injected into it.
 
-## Functions
+There are **two form families** - pick by context:
 
-Expose plain exported functions (`export function ...`), not classes:
+## 1. Large detail pages -> `NgrxFormServiceBase` (ngrx-forms)
 
-- `createForm(initial?: TValue): FormGroupState<TValue>` — builds the initial `createFormGroupState(...)`,
-  applies any default values, and returns `updateForm(state)` so validation is applied from the start.
-  Accept an optional `initial` value to rehydrate persisted/restored state (e.g. a saved filter) into
-  the form's initial values.
-- `updateForm(state, action?): FormGroupState<TValue>` — applies `formGroupReducer(state, action)` when
-  an `action` is passed, then runs the validation via `updateGroup(...)`. There is no separate
-  `validateForm`; validation lives inside `updateForm` so it can never be forgotten.
+Big stateful detail/edit pages use ngrx-forms via the abstract base
+`NgrxFormServiceBase<TInputData, TFormValue>` from `@icz/core/shared/ui-form`. Extend it and implement
+the three protected hooks; the base provides `state$` / `state`, `isDirty`, `onFormAction(action)`,
+`setValue(inputData)`, `getValue()`, `setErrors(BusinessError)`, `markAsPristine()`, `disable()`/`enable()`.
 
 ```ts
-export function createForm(initial?: SummaryFilterValue): FormGroupState<SummaryFilterValue> {
-  const state = createFormGroupState<SummaryFilterValue>('summaryFilter', { ... });
-  return updateForm(state);
-}
-
-export function updateForm(
-  state: FormGroupState<SummaryFilterValue>,
-  action?: FormAction,
-): FormGroupState<SummaryFilterValue> {
-  if (action) {
-    state = formGroupReducer(state, action);
+@Injectable()
+export class CreatePageForm extends NgrxFormServiceBase<DocumentSpaceInputDataDto, CreatePageFormValue> {
+  protected create(value: CreatePageFormValue): void {
+    let form = createFormGroupState('form', value);
+    form = updateGroup(form, {
+      // ngrx-forms validators, e.g. name: validate(required)
+    });
+    this.update(form);
   }
-  return updateGroup<SummaryFilterValue>(state, { /* validators */ });
+
+  protected mapFormValue(inputData: DocumentSpaceInputDataDto): CreatePageFormValue {
+    return { name: inputData.name, mSearchCollectionId: inputData.mSearchCollectionId };
+  }
+
+  protected mapInputData(formValue: CreatePageFormValue): DocumentSpaceInputDataDto {
+    const unboxed = unbox(formValue);
+    return { /* map back to the Dto */ };
+  }
 }
 ```
 
-## Component usage
+- Use `createFormGroupState` / `updateGroup` / `unbox` from `ngrx-forms`; validators come from
+  `ngrx-forms` (used inside `updateGroup`).
+- `mapFormValue` / `mapInputData` translate between the API `*Dto` and the form value type. Use a
+  component-specific value type (in `*.models.ts`) when the Dto's null/undefined typing or ngrx-forms
+  Boxed values need a different shape.
+- Component template: bind `[ngrxFormState]="(form.state$ | async)"` on the `<form>` and
+  `[ngrxFormControlState]` on each control; dispatch via `(ngrxFormsAction)="form.onFormAction($event)"`.
 
-- `form = signal<FormGroupState<TValue>>(createForm());`
-- `onFormAction(action: FormAction) { this.form.update((form) => updateForm(form, action)); }`
-- Type the `action` parameter as `FormAction` (from `@converge/shared/ui-form`), not
-  `Actions<TValue>` — `FormAction` is what the component's `(ngrxFormsAction)` emits.
+## 2. Dialogs / smaller forms -> `FormServiceBase` (Angular reactive forms)
 
-## Validators
+Dialogs and smaller forms use the simpler `FormServiceBase<TValue>` from
+`@icz/core/shared/utils-core`, which wraps an Angular reactive `UntypedFormGroup`. Build the group in
+the constructor; the base provides `group`, `isDirty`, `setValue()`, `getValue()`,
+`setErrors(BusinessError)`, `getErrorsByKey()`, `markAsPristine()`, `disable()`, and
+`setFieldSpecificPermissions()`.
 
-- Use `NgrxValidators` from `@converge/shared/ui-form` (e.g. `NgrxValidators.required`,
-  `NgrxValidators.stringGreaterThanIf(...)`).
+```ts
+@Injectable()
+export class MemberDialogForm extends FormServiceBase {
+  constructor(private formBuilder: UntypedFormBuilder) {
+    super();
+    this.group = this.formBuilder.group({
+      id: [null],
+      comment: [{ value: null, disabled: false }],
+      // ...
+    });
+  }
 
-## Models & types
+  public setValue(formValues: WatchlistMembershipInputDataDto) {
+    this.group.setValue({ /* map Dto -> controls */ });
+  }
+}
+```
 
-- The form value interface lives in the page's `*.models.ts`.
-- Prefer API models for form values when they fit. When API models have wrong null/undefined typing,
-  or when ngrx-forms needs Boxed values, define a component-specific value type and map to/from the
-  API model in `*.api.ts`.
+- Component template: bind `[formGroup]="form.group"` and use `formControlName` on each control.
 
-## Template
+## Shared rules
 
-- Inputs MUST be wrapped in `app-form-field` so the validation CSS classes apply.
-- Bind via `[ngrxFormState]` on the `<form>` and `[ngrxFormControlState]` on each control, dispatching
-  through `(ngrxFormsAction)`.
+- The form value / input types are `*Dto` from the hand-written API (`@icz/<domain>/shared/utils-api`
+  or `@icz/ardp/shared/api`), or a component-specific value type in the page's `*.models.ts`.
+- Server-side validation errors arrive as `BusinessError`; surface them via the base's
+  `setErrors(error)`.
+- One form service per page/dialog. Provide it on the component (`providers: [XxxForm]`) and inject it.

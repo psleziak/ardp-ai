@@ -1,184 +1,239 @@
-# Converge — Copilot instructions
+# ardp - Copilot instructions
 
 These repo-wide instructions are read automatically by GitHub Copilot for every request in this
 workspace. File-type-specific rules live in `.github/instructions/*.instructions.md` and are applied
 automatically when you edit matching files:
 
-- `components.instructions.md` → `**/*.component.{ts,html,scss}`
-- `forms.instructions.md` → `**/*.form.ts`
-- `api.instructions.md` → `**/*.api.ts`
-- `utils.instructions.md` → `**/*.utils.ts`
+- `components.instructions.md` -> `**/*.component.{ts,html,scss}`
+- `forms.instructions.md` -> `**/*.form.ts`
+- `api.instructions.md` -> `**/*.api.ts`
+- `utils.instructions.md` -> `**/*.utils.ts`
 
 ## Overview
 
-Converge is a large Angular 21 + Nx 22 monorepo for a metering / data-acquisition platform. It is a single deployable app (`converge`) plus ~130 Nx libraries. The frontend talks to a backend API (Swagger/OpenAPI) whose TypeScript client is code-generated, not hand-written.
+ardp is a large **Angular 20 + Nx 21** monorepo (npm package name `icz`). Unlike a single-app
+workspace, it ships **three deployable applications** that share a common core:
 
-Node `>=22` is required. Nx runs with an enlarged heap (`--max_old_space_size=12000`) — the `nx` npm script already sets this; use `npm run nx --` rather than a bare `nx` for memory-heavy targets.
+- `aida`, `ibas`, `ras` (each under `apps/`; `ibas` is the Nx `defaultProject`). `ibas-e2e` /
+  `ras-e2e` are their Cypress e2e projects.
+
+Feature/domain code lives in **~250 Nx libraries** under `libs/`, organised by **domain** (see
+Architecture). Node 20+ is expected (toolchain managed via `fnm`).
 
 ## Commands
 
-```bash
-npm start                 # serve app at http://localhost:4200 (proxies /api -> backend, see proxy.conf.json)
-npm run build             # development build
-npm run build:prod        # production build (dist/apps/converge)
-npm run lint              # lint affected projects only
-npm run lint:all          # lint every project
-npm run format            # prettier write across the workspace
-npm run format:check      # prettier check (CI)
-```
-
-Targeted Nx invocations (note the `npm run nx --` prefix to get the large heap):
+There is **no `npm start`**. Serve an app explicitly:
 
 ```bash
-npm run nx -- lint <project-name>      # lint one project, e.g. app-shared-ui-core
-npm run nx -- build converge --configuration production
-npm run nx -- graph                    # visualize the project dependency graph
-npm run nx -- affected -t lint         # what `npm run lint` runs
+npx nx serve ibas              # serve the ibas app (default project) at http://localhost:4200
+npx nx serve aida              # or aida / ras
+npm run build:aida            # dev build (also build:ibas / build:ras)
+npm run build:aida:prod       # production build (also build:ibas:prod / build:ras:prod)
+npm run lint                  # nx workspace-lint && ng lint (lints everything)
+npm run format                # prettier write across affected projects
+npm run format:all            # prettier write across the whole workspace
+npm run format:check          # prettier check (CI)
+npm test                      # ng test (Jest) across projects
 ```
 
-Project names follow the directory path joined by `-` (e.g. `libs/app/shared/ui-core` → `app-shared-ui-core`). See the `name` field in each `project.json`.
+Targeted / affected Nx invocations:
+
+```bash
+npx nx lint <project>                 # lint one project, e.g. core-shared-ui-form
+npx nx test <project>                 # test one project (Jest)
+npx nx build ras --configuration production
+npm run affected:lint                 # lint only affected projects
+npm run affected:test
+npm run dep-graph                     # visualize the project dependency graph
+```
+
+> The `ras` production build is memory-heavy and already sets `NODE_OPTIONS=--max_old_space_size=8192`
+> in its npm script. Other targets do not need an enlarged heap.
+
+Project names usually follow the directory path under `libs/` joined by `-`
+(`libs/core/shared/ui-form` -> `core-shared-ui-form`), but naming is **not fully consistent** in this
+repo (e.g. `libs/aida/document-space` is just `document-space`). Always confirm via the `name` field
+in `project.json` or `npx nx show projects`.
 
 ### Tests
 
-There is **no unit test runner configured** (`unitTestRunner: "none"` in `nx.json`, zero `.spec.ts` files). Do not assume `nx test` works or that tests exist. Verify changes via `npm start`, build, and lint.
+Unlike some sibling repos, ardp **does have a unit test runner**: Jest is configured
+(`@nx/jest:jest`), each project has a `test` target, and `.spec.ts` files exist. Targets run with
+`passWithNoTests`. Run `npx nx test <project>` or `npm test`. New `.spec.ts` files are welcome.
 
 ### Pre-commit
 
-No pre-commit hooks are configured. Run `npm run format` and `npm run lint` before committing to ensure code quality.
+No pre-commit hooks are configured. Run `npm run format` and `npm run lint` before committing.
 
 ## Architecture
 
-### App shell vs. libraries
+### Apps vs. libraries
 
-Two parallel homes for feature code exist; both are in active use:
-
-- **`apps/converge/src/features/<domain>/`** — older/in-app features (e.g. `data-acquisition`, `advanced-validation`, `dashboard`, `calculation`). Each is an Angular `NgModule`, **lazy-loaded** from `apps/converge/src/app/utils/routes.ts`. Internally they follow a `containers/` (smart, routed/stateful) + `components/` (presentational) split.
-- **`libs/`** — newer, extracted Nx libraries. New work generally goes here.
-
-When adding a route/feature, wire it into `apps/converge/src/app/utils/routes.ts`.
+- `apps/<app>/` (`aida`, `ibas`, `ras`) - thin app shells that wire routing and bootstrap.
+- `libs/` - where feature/domain code lives. New work goes here.
 
 ### Library taxonomy (`libs/`)
 
-Two top-level scopes:
+Libraries are grouped by **domain**, not by a single `app`/`shared` split:
 
-- `libs/app/**` — `scope:app`, the main product's shared + feature libs.
-- `libs/shared/**` — `scope:shared`, cross-cutting (`utils-core`, `ui-core`) usable by everything.
+- `libs/core/**` - cross-domain shared building blocks (`shared/ui-core`, `shared/ui-form`,
+  `shared/utils-core`, `shared/utils-http`, `shared/utils-intl`, plus domain features like
+  `document`, `issue`, `lookup`, ...).
+- `libs/ardp/**` - the umbrella/base domain.
+- `libs/aida/**`, `libs/ibas/**`, `libs/ras/**` - per-application domains.
 
-Each lib is tagged in its `project.json` with a `scope:*` and a `type:*`. Library folders are named by type: `feature`/`feat-*` (smart feature), `ui-*` (presentational/dialog), `utils-*` (logic/API). Import libs via their `@converge/...` path alias (defined in `tsconfig.base.json` `paths`), never by relative path across lib boundaries.
+Each lib is tagged in its `project.json` with a `scope:*` and a `type:*`. Import libs via their
+`@icz/...` path alias (defined in `tsconfig.base.json` `paths`), never by relative path across lib
+boundaries.
 
 ### Module boundary rules (enforced by ESLint)
 
-`@nx/enforce-module-boundaries` in `eslint.config.mjs` is an **error**. Allowed dependency directions:
+`@nx/enforce-module-boundaries` (root `.eslintrc.json`) is an **error**. Allowed directions:
 
-- `type:utils` → `type:utils` only
-- `type:ui` → `utils`, `ui`
-- `type:feature` → `utils`, `ui`
-- `scope:shared` → `scope:shared` only; `scope:app` → `scope:shared` + `scope:app`
+**By type:**
 
-A lint failure mentioning module boundaries means the import violates this matrix — fix the dependency direction, don't suppress it.
+- `type:utils` -> `utils`
+- `type:ui` -> `utils`, `ui`
+- `type:feature` -> `utils`, `ui`
+- `type:plugin` -> `utils`, `ui`, `feature`
+
+**By scope (domain):**
+
+- `scope:core` -> `core` only
+- `scope:ardp` -> `ardp` only
+- `scope:aida` -> `ardp`, `core`, `aida`
+- `scope:ibas` -> `ardp`, `core`, `ibas`
+- `scope:ras` -> `ardp`, `core`, `ras`
+
+A lint failure mentioning module boundaries means the import violates this matrix - fix the
+dependency direction, don't suppress it. Folder names reflect the type: `feat-*` / `ui-*` / `utils-*`.
 
 ### Path aliases
 
-- `@cnv` / `@cnv/*` → `apps/converge/src` (in-app imports)
-- `@converge/<scope>/<lib>` → the lib's `src/index.ts` (cross-lib imports)
-- `@shared`, `@shared/services` → in-app shared module barrel
+- `@icz/<domain>/<...>` -> the lib's `src/index.ts` (e.g. `@icz/core/shared/ui-form`,
+  `@icz/aida/document-space`, `@icz/core/document/ui-detail-page`).
+- `@icz/ardp`, `@icz/ardp/*` and `@ibas/*` also exist for the umbrella/ibas domains.
 
-### Generated API client
+### API layer (hand-written, NOT generated)
 
-`libs/app/shared/utils-api` contains **generated** `models/` and `services/` — do not hand-edit them. They are produced by `swagger/sync.sh <output-root>` which runs `swagger-codegen-cli.jar` (typescript-angular) against `swagger/swagger.json` using the templates in `swagger/templates/` and the `swagger/sync.py` post-processor (enum-name fixups, `Schema` suffix cleanup). `utils-api/**` is excluded from linting. To refresh the client, update `swagger.json` and re-run the sync script; don't manually patch the output.
+ardp's HTTP API layer is **hand-written** - there is no swagger/OpenAPI codegen here. API services
+live in domain `utils-api` libs (`@icz/{core,aida,ibas,ras}/shared/utils-api`) and in
+`@icz/ardp/shared/api`. A service is a plain `@Injectable({ providedIn: 'root' })` that calls the
+shared `HttpService` (`@icz/core/shared/utils-http`):
+
+```ts
+@Injectable({ providedIn: 'root' })
+export class AdminService {
+  readonly #http = inject(HttpService);
+
+  getAuditLogRecord(auditLogId: number): Observable<AuditLogRecordDto> {
+    return this.#http.post('Admin/GetAuditLogRecord', { auditLogId });
+  }
+}
+```
+
+Models are `*Dto` interfaces under each `utils-api` lib's `models/`. To add an endpoint, **write the
+service method and DTOs by hand** following the existing shape - do not look for a generator. See
+`api.instructions.md` for the per-component `*.api.ts` wrapper convention.
 
 ### State management
 
-NGRX is used app-wide: `@ngrx/store`, `effects`, `signals`, `component-store`, plus `ngrx-forms`. Global state is registered in `apps/converge/src/app/app.module.ts` (e.g. `SHARED_STATE_KEY`, `METER_DATA_FEATURE_KEY`); feature state lives with its feature/lib.
-
-### Bootstrapping
-
-`apps/converge/src/main.ts` does an explicit pre-bootstrap sequence **before** `bootstrapModule(AppModule)`: fetches `/assets/config/config.json` (runtime `config`, incl. `api` base URL), `/assets/versions.json`, and system parameters (`settings`), then sets the ag-Grid Enterprise license. Runtime config is loaded from assets at startup, not baked into the bundle — `environment.ts`/`environment.prod.ts` only carry the `production` flag.
+NGRX is used across the workspace: `@ngrx/store`, `effects`, `component-store`, `signals`,
+`operators`, `store-devtools`, plus `ngrx-forms` for reactive form state on large pages.
 
 ### Key UI stacks
 
-ag-Grid Enterprise (registered globally), Kendo Angular, Angular Material + CDK, FontAwesome Pro, ECharts (`ngx-echarts`), JointJS/Rappid (diagramming), i18next (`angular-i18next`) for localization, SignalR (`@microsoft/signalr`) for realtime.
+**Kendo Angular** is used heavily (buttons, inputs, dropdowns, dialog, layout, treeview, upload,
+date-inputs, intl/l10n, ...), alongside **ag-Grid**, **Angular Material + CDK**, **FontAwesome Pro**,
+and **SignalR** (`@microsoft/signalr`) for realtime. There is **no** ECharts, JointJS, or i18next in
+this repo.
+
+### Localization
+
+Localization uses `@icz/core/shared/utils-intl` plus the `trans` helper exported from
+`@icz/core/shared/ui-core` (and Kendo's intl/l10n for Kendo components) - **not** angular-i18next.
+Pass the translations object into pure helpers rather than importing state inside them.
 
 ## Conventions
 
-- Components default to `OnPush` change detection and `scss` (see `nx.json` generators); component generation skips tests.
-- Default git branch is `develop` (Nx `defaultBase`); PRs target `develop`.
-- Prettier is the formatter (v2). Run `npm run format` before large commits; lint-staged also handles it.
-- Use `date-fns` for date handling (manipulation, comparison, arithmetic). Do not use `moment`/`moment-timezone` in new code (it remains only in legacy utils). Prefer existing helpers in `DateUtils` (`@converge/shared/utils-core`) such as `toDateOnlyJSON` over inline format strings.
-- Never use the em/en dash character (`—` / `–`) in code, comments, commit messages, or any generated text. Always use a plain hyphen (`-`) instead.
+- The default git branch is `master` (Nx `defaultBase`); PRs target `master`.
+- Prettier (v2) is the formatter. Run `npm run format` before large commits.
+- Use `date-fns` for date handling (manipulation, comparison, arithmetic). Avoid `moment` in new code.
+- Never use the em/en dash character (`—` / `–`) in code, comments, commit messages, or any generated
+  text. Always use a plain hyphen (`-`) instead.
 
 ## File structure & SRP
 
-We organise feature/page code into small, single-responsibility files with a **flat,
-folder-per-component** layout. Keep every file as small as is reasonable; push helper logic out of
-components into `*.utils.ts`, API calls into `*.api.ts`, and form setup into `*.form.ts`.
+Feature/page code is organised into small, single-responsibility files with a **flat,
+folder-per-component** layout. Push helper logic out of components into `*.utils.ts`, API calls into
+`*.api.ts`, and form setup into `*.form.ts`. These conventions are pervasive in the repo
+(~750 `*.component.ts`, ~130 `*.models.ts`, plus `*.form.ts` / `*.api.ts` / `*.utils.ts`).
 
-A routed page (e.g. `main-page`) groups its files by a shared name prefix at the lib root:
+A routed page groups its files by a shared name prefix at the lib root:
 
 ```
 src/lib/
   main-page.component.ts / .html / .scss   # smart component (UI state only)
-  main-page.form.ts                        # ngrx-forms createForm / updateForm
+  main-page.form.ts                        # form service (class-based, see forms.instructions.md)
   main-page.api.ts                         # @Injectable API wrapper, returns mapped models
   main-page.utils.ts                       # pure helpers (formatters, row builders, constants)
   main-page.models.ts                      # shared interfaces / value types
   stat-table/                              # child component, own folder
     stat-table.component.ts / .html / .scss
-  time-deviation-chart/                    # child component with its own utils
-    time-deviation-chart.component.ts / .html / .scss
-    time-deviation-chart.utils.ts
 ```
 
 Rules:
 
-- **Folder per component.** Each component lives in its own directory. If component B is used only
-  by component A, nest B's folder inside A's folder.
-- **Child components may have their own** `*.utils.ts` / `*.form.ts` / `*.api.ts` / `*.models.ts`,
-  following the same flat naming, scoped to that component's folder.
-- **Single responsibility.** A component file holds UI state and wiring only. Anything that can
-  reasonably move to utils/form/api should move there — but keep it sensible, don't over-extract.
-- See the file-type-specific instruction files listed at the top of this document for the detailed
-  rules on components, forms, api, and utils.
+- **Folder per component.** If component B is used only by component A, nest B's folder inside A's.
+- **Child components may have their own** `*.utils.ts` / `*.form.ts` / `*.api.ts` / `*.models.ts`.
+- **Single responsibility.** A component file holds UI state and wiring only. Move anything that can
+  reasonably go to utils/form/api - but keep it sensible, don't over-extract.
+- See the file-type-specific instruction files listed at the top for the detailed rules.
 
 ## Angular & TypeScript Best Practices
 
-You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
+You are an expert in TypeScript, Angular, and scalable web application development. You write
+functional, maintainable, performant, and accessible code following Angular and TypeScript best
+practices.
+
+> NOTE: Much of the existing ardp code predates these targets (it still uses `@Input`/`@Output`, the
+> `private` keyword, constructor injection, `@HostBinding`). For **new and edited** code, prefer the
+> modern style below; match the surrounding file only where mixing styles would be jarring.
 
 ### TypeScript Best Practices
 
-- Use strict type checking
-- Prefer type inference when the type is obvious
-- Avoid the `any` type; use `unknown` when type is uncertain
+- Use strict type checking.
+- Prefer type inference when the type is obvious.
+- Avoid the `any` type; use `unknown` when the type is uncertain.
 
-> NOTE: This project is on **Angular 21**. Rules below are tuned for v21; a few v22+ defaults (automatic `OnPush`, `@Service`, stable Signal Forms) do not yet apply and are noted inline. Re-tune when we migrate to v22.
+> This project is on **Angular 20**. Standalone is the default; a few v22+ defaults (automatic
+> `OnPush`, `@Service`, stable Signal Forms) do not apply yet and are noted inline. Re-tune on upgrade.
 
 ### Angular Best Practices
 
-- Always use standalone components over NgModules
-- Must NOT set `standalone: true` inside Angular decorators. It's the default in Angular v20+.
-- Set `changeDetection: ChangeDetectionStrategy.OnPush` explicitly on components (it is the Nx generator default here and is NOT yet automatic in Angular 21 — automatic `OnPush` only lands in v22+).
-- Use signals for state management
-- Implement lazy loading for feature routes
-- Do NOT use the `@HostBinding` and `@HostListener` decorators. Put host bindings inside the `host` object of the `@Component` or `@Directive` decorator instead
-- Use `NgOptimizedImage` for all static images.
-  - `NgOptimizedImage` does not work for inline base64 images.
+- Use standalone components (default since v20). Do NOT set `standalone: true` explicitly.
+- Set `changeDetection: ChangeDetectionStrategy.OnPush` explicitly (the Nx generator default here;
+  automatic `OnPush` is v22+ only).
+- Use signals for state management; `computed()` for derived state.
+- Implement lazy loading for feature routes.
+- Do NOT use the `@HostBinding` / `@HostListener` decorators. Put host bindings inside the `host`
+  object of the `@Component` / `@Directive` decorator instead.
+- Use `NgOptimizedImage` for static images (not for inline base64).
 
 ### State Management
 
-- Use signals for local component state
-- Use `computed()` for derived state
-- Keep state transformations pure and predictable
-- Do NOT use `mutate` on signals, use `update` or `set` instead
+- Use signals for local component state and `computed()` for derived state.
+- Keep state transformations pure and predictable.
+- Do NOT use `mutate` on signals; use `update` or `set`.
 
 ### Templates
 
-- Keep templates simple and avoid complex logic
-- Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
-- Use the async pipe to handle observables
-- Do not assume globals like (`new Date()`) are available.
+- Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf` / `*ngFor` / `*ngSwitch`.
+- Use the async pipe to handle observables.
+- Keep template logic minimal.
 
 ### Services
 
-- Design services around a single responsibility
-- Use `@Injectable({ providedIn: 'root' })` for singleton services. (The `@Service` decorator is v22+ only — do not use it on this v21 project yet.)
-- Use the `inject()` function instead of constructor injection
+- Design services around a single responsibility.
+- Use `@Injectable({ providedIn: 'root' })` for singletons (the `@Service` decorator is v22+ only).
+- Prefer the `inject()` function over constructor injection in new code.

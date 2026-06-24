@@ -1,8 +1,8 @@
-# Converge - Codex
+# ardp - Codex
 
-This repository shares its AI guidance with GitHub Copilot and Claude Code. The canonical source of truth is the linked `.github/` configuration from `C:\Code\converge-ai`.
+This repository shares its AI guidance with GitHub Copilot and Claude Code. The canonical source of truth is the linked `.github/` configuration from `C:\Code\ardp-ai`.
 
-Before making code changes, read `.github/copilot-instructions.md` and treat it as the repo-wide Converge guidance.
+Before making code changes, read `.github/copilot-instructions.md` and treat it as the repo-wide ardp guidance.
 
 Also read the relevant focused instruction files when the task touches these areas:
 

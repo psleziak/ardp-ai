@@ -37,8 +37,10 @@ Smart and presentational Angular components. Keep them small — UI state and wi
   TypeScript `private` keyword. Inject into `readonly #name = inject(...)` fields and name internal
   helpers `#reload()`, `#commit()`, etc. (the `on*` handler naming rule below still applies to
   template-bound methods, which stay public).
-- Use `rxMethod` + `tapResponse` for API calls. Keep loading signals and error dispatch
-  (`SharedActions.error`) in the component — the `*.api.ts` returns clean mapped Observables.
+- Use `rxMethod` + `tapResponse` for API calls. Keep loading signals and error handling in the
+  component (the `tapResponse` error callback) - the `*.api.ts` returns clean mapped Observables.
+  Server-side `BusinessError`s are surfaced via the form service's `setErrors(error)` (see
+  `forms.instructions.md`) or a message box, not a global error action.
 
 ## Naming
 
@@ -64,21 +66,23 @@ Smart and presentational Angular components. Keep them small — UI state and wi
 
 ## SCSS
 
-- To set a fixed `app-form-field` label width, use the `app-form-field` SCSS mixin via `::ng-deep`:
+- To set a fixed `app-form-field` label width, use the shared `app-form-field-label($width)` SCSS
+  mixin (from the workspace `mixins` include path) via `::ng-deep`:
 
   ```scss
   @use 'mixins' as *;
 
   :host::ng-deep {
-    @include app-form-field(80px);
+    @include app-form-field-label(200px);
   }
   ```
 
-- Alternatively, when you need a dynamic width (e.g. `fit-content`) rather than a fixed value,
-  target the `.app-form-field__label` class directly through `::ng-deep`:
+- For other ag-Grid / Kendo tweaks the same `mixins` include path exposes helpers (e.g.
+  `app-grid-big-selection-checkbox()`). When you need a dynamic width rather than a fixed value,
+  target the label span directly through `::ng-deep`:
 
   ```scss
-  .toolbar::ng-deep .app-form-field__label {
+  .toolbar::ng-deep .app-form-field > span:first-child {
     min-width: fit-content;
   }
   ```

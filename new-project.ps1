@@ -41,11 +41,10 @@ foreach ($it in $items) {
   Write-Host "kopia: $it"
 }
 
-# V novom link.ps1 nastavit default $Dst na cielovy projekt
+# V novom link.ps1 nastavit default $Dst na cielovy projekt (nahradi akykolvek existujuci default)
 $linkPs1 = Join-Path $Path 'link.ps1'
 $content = Get-Content $linkPs1 -Raw
-$content = $content.Replace("param([string]`$Dst = 'C:\Code\converge-4.6')",
-                            "param([string]`$Dst = '$Dst')")
+$content = $content -replace "param\(\[string\]\`$Dst = '[^']*'\)", "param([string]`$Dst = '$Dst')"
 Set-Content $linkPs1 $content -Encoding utf8 -NoNewline
 
 # Cisty git repo + prvy commit
